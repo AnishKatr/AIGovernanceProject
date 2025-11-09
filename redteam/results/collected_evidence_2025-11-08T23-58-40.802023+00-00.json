@@ -1,0 +1,37 @@
+{
+  "collected_at": "2025-11-08T23:58:24.498732+00:00",
+  "base_url": "http://localhost:8000",
+  "steps": [
+    {
+      "step": "health_check",
+      "result": {
+        "ok": false,
+        "error": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000002165FD69010>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      }
+    },
+    {
+      "step": "post_task",
+      "request": {
+        "task": "process-expense"
+      },
+      "result": {
+        "ok": false,
+        "error": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /tasks (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000002165FD6D6D0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      }
+    },
+    {
+      "step": "run_rt01",
+      "result": {
+        "ok": false,
+        "error": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /tests/rt-01 (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000002165FD6DF90>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      }
+    },
+    {
+      "step": "get_logs",
+      "result": {
+        "ok": false,
+        "error": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /logs (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000002165FC13100>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+      }
+    }
+  ]
+}
