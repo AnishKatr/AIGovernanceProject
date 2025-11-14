@@ -1,0 +1,11 @@
+# Secrets
+credentials.json
+token.json
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.env/
