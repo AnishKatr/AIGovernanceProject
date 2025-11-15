@@ -9,3 +9,5 @@ __pycache__/
 # Virtual environments
 venv/
 .env/
+# Local sqlite database used during development
+hr_system.db
