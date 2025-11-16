@@ -1,198 +1,311 @@
 from __future__ import print_function
-import os.path
 import io
-
-# Google auth & API client imports
-from google.oauth2.credentials import Credentials           # Stores and refreshes user OAuth tokens
-from google_auth_oauthlib.flow import InstalledAppFlow      # Handles the browser-based OAuth flow
-from googleapiclient.discovery import build                 # Builds a Drive API client
-from googleapiclient.http import MediaIoBaseDownload        # Streams file downloads from Drive
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 
-# ---------------- CONFIGURATION ----------------
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
-# SCOPES define what permissions your app is asking for.
-# "drive.readonly" means: this script can read files from your Drive but NOT modify them.
+# Your downloaded service account key JSON file.
+SERVICE_ACCOUNT_FILE = "service_account_key.json"
+
+# Read-only Drive access – enough for listing and downloading.
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
-# This is the OAuth client secret file you downloaded from Google Cloud Console.
-# It contains your client_id and client_secret for the "Desktop App" OAuth client.
-CLIENT_SECRET_FILE = "client_secret.json"
+# If True, the script will start by trying to open a specific shared folder.
+START_IN_SHARED_FOLDER = True
 
-# This file will be CREATED by the script after you log in once.
-# It stores your access + refresh tokens so you don't need to log in every time.
-TOKEN_FILE = "token.json"
+# This must match the name of the folder you shared with the service account.
+SHARED_FOLDER_NAME = "Dummy Folder"
 
-# ------------------------------------------------
 
+# ============================================================
+# AUTHENTICATION
+# ============================================================
 
 def get_drive_service():
     """
-    Authenticate as the user (YOU) and return a Google Drive service client.
+    Build and return an authenticated Google Drive API client.
 
-    This function:
-      - checks if we already have valid OAuth credentials in token.json
-      - if not, opens a browser window for you to log in and grant permissions
-      - then builds and returns a Drive API client bound to your account
+    Uses the service account JSON file and the configured SCOPES.
     """
-    creds = None
-
-    # If token.json exists, load stored credentials from that file.
-    # token.json is created the first time you successfully complete the OAuth flow.
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-
-    # If there are no valid credentials, go through the login flow.
-    if not creds or not creds.valid:
-        # If credentials exist but are expired AND have a refresh token, refresh them silently.
-        if creds and creds.expired and creds.refresh_token:
-            # Lazy import to avoid unused warning if not needed
-            from google.auth.transport.requests import Request
-            creds.refresh(Request())
-        else:
-            # No valid creds yet: start the OAuth flow using the client_secret.json file.
-            # This spins up a local web server and opens a browser for you to log into your Google account.
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CLIENT_SECRET_FILE, SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-
-        # Save the credentials to token.json for next time.
-        # This way, you rarely have to log in again unless you delete this file or change scopes.
-        with open(TOKEN_FILE, "w") as token:
-            token.write(creds.to_json())
-
-    # Build and return the Drive API client for version v3.
-    service = build("drive", "v3", credentials=creds)
-    return service
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE,
+        scopes=SCOPES
+    )
+    return build("drive", "v3", credentials=creds)
 
 
-def list_files(page_size=20, query=None):
+service = get_drive_service()
+
+
+# ============================================================
+# LIST ROOT + SHARED ITEMS
+# ============================================================
+
+def list_root_items():
     """
-    List files from the user's real Google Drive (the same one you see in the browser).
+    List all items visible to the service account at the top level.
 
-    Arguments:
-      page_size: how many files to list at once (default 20).
-      query: an optional Drive search query (e.g., "name contains 'report'").
+    Includes:
+      - Items in the service account's own root.
+      - Items that were shared with this service account (sharedWithMe).
 
     Returns:
-      A list of file metadata dictionaries, each containing:
-        - id
-        - name
-        - mimeType
+        List of dicts: each has id, name, mimeType.
     """
-    service = get_drive_service()  # Get an authenticated Drive client
+    results = service.files().list(
+        q="trashed = false and (sharedWithMe or 'root' in parents)",
+        fields="files(id, name, mimeType)",
+        pageSize=200,
+    ).execute()
 
-    # Base parameters for files.list()
-    params = {
-        "pageSize": page_size,
-        "fields": "files(id, name, mimeType)",  # Limit response fields to what we need
-    }
-
-    # If a query string was provided (like "name contains 'report'"), add it.
-    # This uses the Drive v3 query language.
-    if query:
-        params["q"] = query
-
-    # Call the Drive API to list files and execute the HTTP request.
-    results = service.files().list(**params).execute()
-
-    # Extract the list of files from the response. If no 'files' key, default to [].
     items = results.get("files", [])
 
     if not items:
-        print("No files found.")
+        print("\nNo items found that are visible to this service account.")
+        print("Make sure you shared a folder with the service account email.")
         return []
 
-    # Print a numbered list so the user can choose one to download later.
-    print("\n--- Files Found ---")
-    for i, item in enumerate(items, start=1):
-        print(f"{i}. {item['name']} (ID: {item['id']}) [{item['mimeType']}]")
+    print("\n--- Items visible to this service account ---")
+    for idx, item in enumerate(items, start=1):
+        print(f"{idx}. {item['name']} (ID: {item['id']})")
 
     return items
 
 
-def download_file(file_id, destination_path):
+# ============================================================
+# LIST CONTENTS OF A FOLDER
+# ============================================================
+
+def list_folder_contents(folder_id):
     """
-    Download a file from the user's Google Drive to the local filesystem.
+    List all children of a folder (files + subfolders).
 
-    Arguments:
-      file_id:         the Drive file ID (string)
-      destination_path: local path/filename where the file should be saved
+    Args:
+        folder_id: ID of the folder to list.
     """
-    service = get_drive_service()  # Get an authenticated Drive client
+    results = service.files().list(
+        q=f"'{folder_id}' in parents and trashed = false",
+        fields="files(id, name, mimeType)",
+        pageSize=200,
+    ).execute()
 
-    # Build the request to get the file's media (raw bytes).
-    request = service.files().get_media(fileId=file_id)
+    return results.get("files", [])
 
-    # Open a local file handle for writing binary data.
-    fh = io.FileIO(destination_path, "wb")
 
-    # MediaIoBaseDownload handles chunked downloading and progress updates.
+# ============================================================
+# DOWNLOAD / EXPORT FILES
+# ============================================================
+
+def download_file(file_obj):
+    """
+    Download a file, exporting Google Docs/Sheets/Slides as needed.
+
+    Args:
+        file_obj: dict with keys 'id', 'name', 'mimeType'.
+    """
+    file_id = file_obj["id"]
+    name = file_obj["name"]
+    mime = file_obj["mimeType"]
+
+    print(f"\nDownloading '{name}' ...")
+
+    # Map Google-native types to export formats.
+    google_types = {
+        "application/vnd.google-apps.document": (
+            "application/pdf",
+            ".pdf",
+        ),
+        "application/vnd.google-apps.spreadsheet": (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xlsx",
+        ),
+        "application/vnd.google-apps.presentation": (
+            "application/pdf",
+            ".pdf",
+        ),
+    }
+
+    if mime in google_types:
+        export_mime, ext = google_types[mime]
+        request = service.files().export_media(fileId=file_id, mimeType=export_mime)
+        filename = name + ext
+    else:
+        request = service.files().get_media(fileId=file_id)
+        filename = name
+
+    fh = io.FileIO(filename, "wb")
     downloader = MediaIoBaseDownload(fh, request)
-
-    print(f"Downloading {file_id}...\n")
-
     done = False
+
     while not done:
-        # next_chunk() downloads the next chunk and returns (status, done)
         status, done = downloader.next_chunk()
-        if status:
-            # status.progress() returns a float between 0 and 1 indicating download progress.
-            print(f"Progress: {int(status.progress() * 100)}%")
 
-    print(f"\n✅ Download complete! Saved as: {destination_path}")
+    print(f"Saved as: {filename}\n")
 
+
+# ============================================================
+# FOLDER BROWSER WITH CUMULATIVE FILTERING
+# ============================================================
+
+def browse_folder(folder_id, folder_name):
+    """
+    Interactive browser inside a folder.
+
+    - Shows numbered list of items.
+    - 'f' filters by substring (cumulative).
+    - 'r' resets back to full list.
+    - number: open folder or download file.
+    - 'q' returns to previous level.
+    """
+    full_list = list_folder_contents(folder_id)
+
+    if not full_list:
+        print(f"\nFolder '{folder_name}' is empty.")
+        return
+
+    # Start with full list; filtering narrows this down.
+    filtered_list = full_list[:]
+
+    while True:
+        print(f"\n--- Items inside '{folder_name}' ---")
+
+        if not filtered_list:
+            print("(No items match the current filter.)")
+        else:
+            for idx, item in enumerate(filtered_list, start=1):
+                print(f"{idx}. {item['name']} (ID: {item['id']})")
+
+        print(
+            "\nOptions:\n"
+            "  number - open/download item by number\n"
+            "  f      - filter items by name (cumulative)\n"
+            "  r      - reset filter\n"
+            "  q      - go back\n"
+        )
+
+        choice = input("Enter choice: ").strip().lower()
+
+        if choice == "q":
+            # Return to previous menu (main or parent folder)
+            return
+
+        elif choice == "r":
+            # Restore full list
+            filtered_list = full_list[:]
+            print("Filter reset to full list.")
+
+        elif choice == "f":
+            term = input("Enter name fragment to filter by: ").strip().lower()
+            if not term:
+                print("Empty filter ignored.")
+                continue
+
+            # Cumulative filtering: filter the CURRENT list
+            filtered_list = [
+                item for item in filtered_list
+                if term in item["name"].lower()
+            ]
+
+            if not filtered_list:
+                print("No items match this filter. Try 'r' to reset.")
+
+        elif choice.isdigit():
+            idx = int(choice)
+            if not (1 <= idx <= len(filtered_list)):
+                print("Invalid number.")
+                continue
+
+            selected = filtered_list[idx - 1]
+            mime = selected["mimeType"]
+
+            if mime == "application/vnd.google-apps.folder":
+                # Recurse into subfolder
+                browse_folder(selected["id"], selected["name"])
+            else:
+                # Download file
+                download_file(selected)
+
+        else:
+            print("Invalid input. Use a number, f, r, or q.")
+
+
+# ============================================================
+# MAIN PROGRAM
+# ============================================================
 
 def main():
     """
-    Main interactive loop:
-      1. Ask the user for an optional search term.
-      2. List matching files from Google Drive.
-      3. Ask which one to download.
-      4. Ask what filename to save it as locally.
-      5. Download the selected file.
+    Main entry point:
+
+    1. List root+shared items.
+    2. If START_IN_SHARED_FOLDER is True, auto-open that folder once.
+    3. After returning from it (pressing 'q'), show top-level menu.
     """
-    print("\n=== Google Drive OAuth Client (acts as YOU) ===\n")
 
-    # Prompt user for a search string. If they press Enter, we won't filter by name.
-    search = input("Search for filename (press Enter to list all): ").strip()
+    print("\n=== Google Drive API Client (Service Account) ===\n")
 
-    # Build a simple query: name contains '<search>'
-    # If search is empty, query remains None and list_files() will list everything.
-    query = f"name contains '{search}'" if search else None
-
-    # Fetch a list of files based on the query.
-    files = list_files(page_size=20, query=query)
-
-    if not files:
-        # No files found or accessible.
+    root_items = list_root_items()
+    if not root_items:
         return
 
-    # Ask the user which file they want to download by its number in the printed list.
-    choice = input("\nEnter the number of the file to download: ").strip()
+    # Try to auto-open the shared folder first
+    if START_IN_SHARED_FOLDER:
+        target = None
+        for item in root_items:
+            if (
+                item["mimeType"] == "application/vnd.google-apps.folder"
+                and item["name"] == SHARED_FOLDER_NAME
+            ):
+                target = item
+                break
 
-    # Validate input: must be a digit and within the range of returned files.
-    if not choice.isdigit() or not (1 <= int(choice) <= len(files)):
-        print("Invalid choice.")
-        return
+        if target:
+            print(f"\nStarting in shared folder '{SHARED_FOLDER_NAME}' ...")
+            browse_folder(target["id"], target["name"])
+            # When user hits 'q' in that folder, they come back here:
+            print("\nBack to top-level items.\n")
+        else:
+            print(
+                f"\nShared folder '{SHARED_FOLDER_NAME}' was NOT found.\n"
+                "Falling back to manual selection.\n"
+            )
 
-    # Convert to 0-based index.
-    chosen = files[int(choice) - 1]
-    print(f"You chose: {chosen['name']} (ID: {chosen['id']})")
+    # Manual top-level navigation is always available
+    while True:
+        print("\n--- Top-level items visible to this service account ---")
+        for idx, item in enumerate(root_items, start=1):
+            print(f"{idx}. {item['name']} (ID: {item['id']})")
 
-    # Ask user how to name the downloaded file locally.
-    # If they press Enter, use the same name as in Drive.
-    dest = input(
-        f"Save as (press Enter for '{chosen['name']}'): "
-    ).strip() or chosen["name"]
+        print("Enter a NUMBER to open item, or q to quit.")
+        choice = input("Choice: ").strip().lower()
 
-    # Call the function to download the file.
-    download_file(chosen["id"], dest)
+        if choice == "q":
+            return
+
+        if not choice.isdigit():
+            print("Invalid input.")
+            continue
+
+        idx = int(choice)
+        if not (1 <= idx <= len(root_items)):
+            print("Invalid selection.")
+            continue
+
+        selected = root_items[idx - 1]
+        mime = selected["mimeType"]
+
+        if mime == "application/vnd.google-apps.folder":
+            browse_folder(selected["id"], selected["name"])
+        else:
+            download_file(selected)
 
 
-# Standard Python entry point check.
-# If this script is run directly (not imported as a module), run main().
 if __name__ == "__main__":
     main()
+
 
