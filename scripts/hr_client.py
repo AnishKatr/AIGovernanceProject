@@ -23,6 +23,14 @@ class Employee(BaseModel):
     bank_account_number: str
     account_balance: float
 
+
+class BalanceUpdate(BaseModel):
+    employee_id: Optional[int] = None
+    name: Optional[str] = None
+    # Either set an absolute new balance or provide a delta to add/subtract
+    new_balance: Optional[float] = None
+    delta: Optional[float] = None
+
 # In-memory employee database
 employees_db: List[Employee] = []
 
@@ -121,6 +129,81 @@ async def search_employees_by_name(name: str = Query(..., min_length=2, descript
         raise HTTPException(status_code=404, detail=f"No employees found matching '{name}'")
     
     return results
+
+
+def _find_employee(employee_id: Optional[int] = None, name: Optional[str] = None) -> Optional[Employee]:
+    """Helper: find an employee by id or by name (first, last, or full name).
+
+    Name matching is case-insensitive. If both provided, id takes precedence.
+    Returns the first match or None.
+    """
+    if employee_id is not None:
+        return next((emp for emp in employees_db if emp.employee_id == employee_id), None)
+
+    if name:
+        name_lower = name.strip().lower()
+        # Exact full-name match first
+        full_match = next((emp for emp in employees_db if f"{emp.first_name} {emp.last_name}".lower() == name_lower), None)
+        if full_match:
+            return full_match
+
+        # Then try first or last name match
+        return next((emp for emp in employees_db if emp.first_name.lower() == name_lower or emp.last_name.lower() == name_lower), None)
+
+    return None
+
+
+@app.get("/employees/balance")
+async def get_employee_balance(employee_id: Optional[int] = None, name: Optional[str] = None):
+    """Return account balance for employee looked up by `employee_id` or `name`.
+
+    Provide either `employee_id` or `name` as query parameter. `employee_id` takes precedence.
+    """
+    if employee_id is None and (not name):
+        raise HTTPException(status_code=400, detail="Provide `employee_id` or `name` query parameter")
+
+    emp = _find_employee(employee_id=employee_id, name=name)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    return {
+        "employee_id": emp.employee_id,
+        "name": f"{emp.first_name} {emp.last_name}",
+        "account_balance": emp.account_balance,
+        "bank_name": emp.bank_name,
+        "bank_account_number": emp.bank_account_number,
+    }
+
+
+@app.post("/employees/balance")
+async def update_employee_balance(payload: BalanceUpdate):
+    """Change an employee's account balance.
+
+    Provide either `employee_id` or `name` and either `new_balance` or `delta` in JSON body.
+    - `new_balance` sets the balance outright.
+    - `delta` applies a relative change (positive or negative).
+    """
+    if payload.employee_id is None and (not payload.name):
+        raise HTTPException(status_code=400, detail="Provide `employee_id` or `name` in payload")
+
+    if payload.new_balance is None and payload.delta is None:
+        raise HTTPException(status_code=400, detail="Provide `new_balance` or `delta` in payload")
+
+    emp = _find_employee(employee_id=payload.employee_id, name=payload.name)
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # Apply change
+    if payload.new_balance is not None:
+        emp.account_balance = float(payload.new_balance)
+    else:
+        emp.account_balance = float(round(emp.account_balance + float(payload.delta), 2))
+
+    return {
+        "employee_id": emp.employee_id,
+        "name": f"{emp.first_name} {emp.last_name}",
+        "account_balance": emp.account_balance,
+    }
 
 # Run with: uvicorn filename:app --reload
 if __name__ == "__main__":
