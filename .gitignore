@@ -1,6 +1,17 @@
-# Secrets
+# Secrets & credentials
 credentials.json
 token.json
+*.pem
+*.key
+
+# Environment files (any location)
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+!**/.env.local.example
 
 # Python cache files
 __pycache__/
@@ -8,6 +19,38 @@ __pycache__/
 
 # Virtual environments
 venv/
-.env/
+.venv/
+
 # Local sqlite database used during development
 hr_system.db
+
+# Node/JS artifacts
+node_modules/
+**/node_modules/
+*.tsbuildinfo
+next-env.d.ts
+
+# Testing/output
+coverage/
+
+# Next.js / frontend build artifacts
+.next/
+out/
+build/
+.vercel/
+
+# Yarn / npm metadata
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Misc
+.DS_Store

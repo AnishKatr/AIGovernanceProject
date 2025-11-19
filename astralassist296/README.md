@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Astral Assist Frontend
 
-## Getting Started
+Next.js 14 (App Router) interface for the Astral Assist multi-agent orchestrator with Groq + Pinecone RAG.
 
-First, run the development server:
+## 1. Configure environment variables
+
+Create a local env file and point it at the Flask backend (defaults to `http://localhost:5001` if unset):
+
+```bash
+cd astralassist296
+cp .env.local.example .env.local
+```
+
+Update `NEXT_PUBLIC_BACKEND_URL` if your backend runs elsewhere (for example, a deployed Flask URL or a tunnel).
+
+## 2. Run the backend
+
+Make sure `python Backend/app.py` is running in another terminal so the frontend can reach `/api/query`.
+
+## 3. Start the Next.js dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# or: pnpm dev / yarn dev / bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000) and send a prompt; the UI will call `POST /api/query`, render the orchestrator reasoning, and surface the supporting Pinecone contexts inline.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploying
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+When deploying (e.g., to Vercel), add `NEXT_PUBLIC_BACKEND_URL` (pointing at your hosted Flask API) to the project’s environment variables.

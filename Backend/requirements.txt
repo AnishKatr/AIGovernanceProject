@@ -1,2 +1,6 @@
 Flask
 flask-cors
+python-dotenv
+groq
+pinecone>=3.0.0
+requests

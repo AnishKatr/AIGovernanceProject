@@ -3,13 +3,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ChatMessage from '@/components/chat-message';
 import AgentStatus from '@/components/agent-status';
 import Sidebar from '@/components/sidebar';
 import ConversationStarter from '@/components/conversation-starter';
 import { Send, Sparkles, Menu, X } from 'lucide-react';
+import type { AgentDecision, RetrievedContext } from '@/lib/api';
+import { queryOrchestrator } from '@/lib/api';
 
 interface Message {
   id: string;
@@ -17,6 +18,9 @@ interface Message {
   content: string;
   timestamp: Date;
   agents?: string[];
+  contexts?: RetrievedContext[];
+  decision?: AgentDecision;
+  error?: boolean;
 }
 
 interface Conversation {
@@ -67,6 +71,17 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
+  const mapAgentName = (agentId: string) => {
+    const normalized = agentId.toLowerCase();
+    const mapping: Record<string, string> = {
+      rag: 'Knowledge Base RAG',
+      email: 'Email Agent',
+      drive: 'Drive Agent',
+      hr: 'HR Agent',
+    };
+    return mapping[normalized] || agentId;
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
@@ -82,17 +97,36 @@ export default function Home() {
     setInputValue('');
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      const data = await queryOrchestrator(userMessage.content);
+      const ragAgents = data.result.agents_used.map(mapAgentName);
+      const agentBadges = Array.from(new Set(['Task Decomposition', 'Agent Routing', ...ragAgents]));
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'I\'ve processed your request. The orchestrator has analyzed your task and is routing it to the appropriate agents based on your needs. Results will be compiled and presented shortly.',
+        content: data.result.response,
         timestamp: new Date(),
-        agents: ['Task Decomposition', 'Agent Routing'],
+        agents: agentBadges,
+        contexts: data.result.contexts,
+        decision: data.decision,
       };
       setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content:
+          error instanceof Error
+            ? `I hit an error while contacting the orchestrator: ${error.message}`
+            : 'I hit an unexpected error while contacting the orchestrator.',
+        timestamp: new Date(),
+        error: true,
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
 
     inputRef.current?.focus();
   };
