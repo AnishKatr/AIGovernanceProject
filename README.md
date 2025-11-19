@@ -1,10 +1,10 @@
-# Capstone Protect Starter Repo
+# Capstone Protect Astral Assist - Corporate Agent
 
-This is a starter repository for the Capstone Project.
-Organize your code as per this starter repo structure.
+# Backend
+1. cd Backend
+2. pip install -r requirements.txt
+3. Then run flask server with backend python app.py
 
-Follow `run_instructions.md` to start the example service.
-
-Add and run your own Red Team tests and gather evidence.
-- Review and extend default tests in demo.py 
-- Review and extend Red-Team tests in main.py
+#Frontend
+1. In another terminal
+2. npm run dev
