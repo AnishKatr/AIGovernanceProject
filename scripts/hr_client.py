@@ -91,16 +91,6 @@ async def list_all_employees():
     """List all employees"""
     return employees_db
 
-@app.get("/employees/{employee_id}", response_model=Employee)
-async def get_employee_by_id(employee_id: int):
-    """Get employee by ID"""
-    employee = next((emp for emp in employees_db if emp.employee_id == employee_id), None)
-    
-    if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    
-    return employee
-
 @app.get("/employees/names")
 async def list_employee_names():
     """Get a simple list of all employee names and IDs"""
@@ -112,6 +102,17 @@ async def list_employee_names():
         }
         for emp in employees_db
     ]
+
+
+@app.get("/employees/{employee_id}", response_model=Employee)
+async def get_employee_by_id(employee_id: int):
+    """Get employee by ID"""
+    employee = next((emp for emp in employees_db if emp.employee_id == employee_id), None)
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    return employee
 
 @app.get("/employees/search/by-name", response_model=List[Employee])
 async def search_employees_by_name(name: str = Query(..., min_length=2, description="Search by first or last name")):
