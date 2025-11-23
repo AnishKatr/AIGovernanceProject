@@ -78,14 +78,18 @@ def _prepare_email_json(to_addr: str, subject: str, body: str, attachments: List
 
 def main():
     parser = argparse.ArgumentParser(description="HR → email integration helper (dry-run by default).")
-    target = parser.add_mutually_exclusive_group(required=True)
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt for employee id, subject, and body interactively (dry-run unless you opt to send).",
+    )
+    target = parser.add_mutually_exclusive_group(required=False)
     target.add_argument("--name", help="Employee name to search (partial match supported).")
     target.add_argument("--id", type=int, help="Employee ID to fetch directly.")
 
-    parser.add_argument("--subject", required=True, help="Email subject.")
+    parser.add_argument("--subject", help="Email subject.")
     parser.add_argument(
         "--body-template",
-        required=True,
         help="Python format string for the email body. Available fields: "
         "{first_name}, {last_name}, {full_name}, {department}, {designation}, "
         "{phone}, {email}, {employee_id}, {bank_name}, {bank_account_number}, {account_balance}",
@@ -112,18 +116,43 @@ def main():
     if args.attachment:
         print("Note: attachments must comply with scripts/email_client.py safety checks.")
 
-    # Fetch employee
-    if args.id is not None:
-        employee = _fetch_employee_by_id(args.hr_url, args.id)
+    interactive_mode = args.interactive or not (args.subject and args.body_template and (args.id or args.name))
+
+    # Interactive flow: ask for id, print name/email, then prompt for subject/body.
+    if interactive_mode:
+        emp_id = args.id
+        if emp_id is None:
+            try:
+                emp_input = input("Enter employee ID: ").strip()
+                emp_id = int(emp_input)
+            except ValueError:
+                raise SystemExit("Employee ID must be an integer.")
+        employee = _fetch_employee_by_id(args.hr_url, emp_id)
+        print(f"Employee: {employee.get('first_name')} {employee.get('last_name')} | Email: {employee.get('email')}")
+        subject = input("Subject: ").strip()
+        if not subject:
+            raise SystemExit("Subject is required.")
+        default_body = "Hi {first_name},"
+        body_template = input(f"Body (format fields ok) [default: '{default_body}']: ").strip() or default_body
+        do_send = input("Launch email preview now? [y/N]: ").strip().lower() == "y"
     else:
-        employee = _search_employee_by_name(args.hr_url, args.name)
+        # Non-interactive: use provided flags.
+        if args.id is not None:
+            employee = _fetch_employee_by_id(args.hr_url, args.id)
+        else:
+            employee = _search_employee_by_name(args.hr_url, args.name)
+        if not args.subject or not args.body_template:
+            parser.error("--subject and --body-template are required in non-interactive mode.")
+        subject = args.subject
+        body_template = args.body_template
+        do_send = args.send
 
     # Render body and write JSON
-    body = _render_body(args.body_template, employee)
-    _prepare_email_json(employee["email"], args.subject, body, args.attachment)
+    body = _render_body(body_template, employee)
+    _prepare_email_json(employee["email"], subject, body, args.attachment)
 
-    if not args.send:
-        print("Dry run complete. Run with --send to launch the email preview/confirmation.")
+    if not do_send:
+        print("Dry run complete. Run with --send or confirm in interactive mode to launch the email preview.")
         return
 
     print("Launching scripts/email_client.py (you will be prompted to confirm send)...")
