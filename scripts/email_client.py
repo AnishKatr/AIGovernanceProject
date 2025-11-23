@@ -2,6 +2,8 @@ from __future__ import print_function
 import os.path
 import base64
 import json
+from datetime import datetime
+import uuid
 import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -23,6 +25,27 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 SAFE_ATTACHMENT_EXTENSIONS = {'.txt', '.pdf', '.png', '.jpg', '.jpeg', '.csv', '.py'}
 MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024  # 5 MB
 EMAIL_REGEX = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+# Logs directory for email send records
+LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
+
+
+def save_email_log(entry: dict):
+    """Save a JSON file for the given email log entry into LOGS_DIR.
+
+    The file name is email_<uuid>.json. This function is defensive and will
+    print an error if write fails but won't raise.
+    """
+    try:
+        os.makedirs(LOGS_DIR, exist_ok=True)
+        # Use the provided id or generate one for the filename
+        entry_id = entry.get("id") or str(uuid.uuid4())
+        filename = f"email_{entry_id}.json"
+        path = os.path.join(LOGS_DIR, filename)
+        with open(path, "w") as f:
+            json.dump(entry, f, indent=2, default=str)
+    except Exception as e:
+        print(f"Failed to write email log: {e}")
 
 
 def get_service():
@@ -141,11 +164,36 @@ if __name__ == "__main__":
     if confirm != "y":
         print("Canceled, not sending.")
         exit(0)
+    # Prepare a log entry for this attempt
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "to": to,
+        "subject": subject,
+        "body": body_text,
+        "attachments": attachments,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "status": "pending",
+    }
+    # Save initial pending log
+    save_email_log(log_entry)
 
     try:
         service = get_service()
         msg = create_message_with_attachments(to, subject, body_text, attachments)
         sent = service.users().messages().send(userId="me", body=msg).execute()
-        print("\nSent! Message id:", sent.get("id"))
+        message_id = sent.get("id")
+        log_entry.update({
+            "status": "sent",
+            "sent_at": datetime.utcnow().isoformat() + "Z",
+            "message_id": message_id,
+        })
+        save_email_log(log_entry)
+        print("\nSent! Message id:", message_id)
     except Exception as e:
+        log_entry.update({
+            "status": "failed",
+            "failed_at": datetime.utcnow().isoformat() + "Z",
+            "error": str(e),
+        })
+        save_email_log(log_entry)
         print(f"Error sending email: {e}")

@@ -1,8 +1,6 @@
 {
-  "to": "vedaantvyas413@gmail.com",
-  "subject": "Test Email with Attachment",
-  "body": "Hello,\nThis email contains a script attached from the project.\nBest regards,\nYour LLM",
-  "attachments": [
-    "drive_client.py"
-  ]
+  "to": "robert.harrison@company.com",
+  "subject": "Benefits Update",
+  "body": "Hi Robert, quick update for HR.",
+  "attachments": []
 }
