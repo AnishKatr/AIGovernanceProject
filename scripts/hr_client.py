@@ -38,6 +38,7 @@ employees_db: List[Employee] = []
 DEPARTMENTS = ["Engineering", "Sales", "Marketing", "HR", "Finance", "Operations"]
 DESIGNATIONS = ["Manager", "Senior Engineer", "Engineer", "Analyst", "Specialist", "Coordinator"]
 BANKS = ["Chase Bank", "Bank of America", "Wells Fargo", "Citibank", "US Bank"]
+EMAILS = ["tkhambadkone@scu.edu", "vvyas@scu.edu", "akatragadda@scu.edu", "schandramohan@scu.edu", "snathan@scu.edu"]
 
 def generate_employees(count: int = 15):
     """Generate toy employees"""
@@ -51,7 +52,7 @@ def generate_employees(count: int = 15):
             employee_id=i,
             first_name=first_name,
             last_name=last_name,
-            email=f"{first_name.lower()}.{last_name.lower()}@company.com",
+            email=random.choice(EMAILS),
             department=random.choice(DEPARTMENTS),
             designation=random.choice(DESIGNATIONS),
             phone=fake.phone_number(),
