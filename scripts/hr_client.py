@@ -9,6 +9,9 @@ import random
 app = FastAPI(title="Simple HR API", version="1.0.0")
 
 fake = Faker()
+# Deterministic seed for reproducible toy data across restarts
+random.seed(42)
+fake.seed_instance(42)
 
 # Pydantic Models
 class Employee(BaseModel):
