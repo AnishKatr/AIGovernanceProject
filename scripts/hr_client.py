@@ -32,7 +32,6 @@ class BalanceUpdate(BaseModel):
     delta: Optional[float] = None
 
 # In-memory employee database
-
 employees_db: List[Employee] = []
 
 # Configuration
