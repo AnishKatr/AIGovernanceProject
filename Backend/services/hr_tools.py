@@ -137,7 +137,7 @@ def sync_drive_from_hr(
     folder_id: Optional[str] = None,
     csv_name: Optional[str] = None,
     ingest: bool = True,
-    download_files: bool = True,
+    download_files: bool = False,
     namespace: Optional[str] = None,
 ) -> Dict[str, str]:
     """Refresh employee_database.csv in Drive using the HR API."""

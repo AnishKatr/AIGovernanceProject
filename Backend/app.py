@@ -107,7 +107,7 @@ def sync_drive():
             hr_url=payload.get("hr_url"),
             folder_id=payload.get("folder_id"),
             csv_name=payload.get("csv_name"),
-            ingest=payload.get("ingest", True),
+            ingest=payload.get("ingest", False),
             namespace=payload.get("namespace"),
         )
         return jsonify(result)
