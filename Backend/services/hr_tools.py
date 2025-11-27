@@ -15,7 +15,6 @@ if str(REPO_ROOT) not in sys.path:
 # pylint: disable=wrong-import-position,import-error
 from scripts.email_client import is_safe_attachment, send_email  # type: ignore
 from scripts.integrate_hr_email import (  # type: ignore
-    DEFAULT_HR_URL,
     _fetch_employee_by_id,
     _prepare_email_json,
     _render_body,
@@ -27,6 +26,23 @@ from services.rag_service import build_rag_service_from_env
 
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 DOWNLOAD_DIR = SCRIPTS_DIR / "downloads"
+
+# Allow overriding the HR API base URL via environment variable so deployed
+# backends don't keep calling the local default. Supports either a base URL
+# (e.g., https://hrapi.onrender.com) or the full employees endpoint
+# (e.g., https://hrapi.onrender.com/employees).
+_env_hr_base = os.getenv("HR_API_URL")
+if _env_hr_base:
+    _trimmed = _env_hr_base.rstrip("/")
+    if _trimmed.endswith("/employees"):
+        DEFAULT_HR_URL = _trimmed[: -len("/employees")] or _trimmed
+        drive_tool.HR_API_URL = os.getenv("HR_API_EMPLOYEES_URL", _trimmed)
+    else:
+        DEFAULT_HR_URL = _trimmed
+        drive_tool.HR_API_URL = os.getenv("HR_API_EMPLOYEES_URL", f"{DEFAULT_HR_URL}/employees")
+else:
+    DEFAULT_HR_URL = "http://localhost:8000"
+    drive_tool.HR_API_URL = os.getenv("HR_API_EMPLOYEES_URL", "http://127.0.0.1:8000/employees")
 
 DEFAULT_BODY = (
     "Hi {first_name},\n\n"
