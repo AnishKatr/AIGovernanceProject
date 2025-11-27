@@ -43,22 +43,6 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             </p>
           )}
 
-          {isAssistant && message.contexts && message.contexts.length > 0 && (
-            <div className="space-y-2">
-              {message.contexts.map((context, index) => (
-                <div
-                  key={`${context.id || index}`}
-                  className="rounded-xl border border-border/50 bg-background/60 p-3"
-                >
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                    {context.metadata?.source || context.metadata?.file_name || `Document ${index + 1}`}
-                    {context.score ? ` · score ${context.score.toFixed(2)}` : ''}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">{context.text}</p>
-                </div>
-              ))}
-            </div>
-          )}
         </Card>
         <p className="text-xs text-muted-foreground">
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

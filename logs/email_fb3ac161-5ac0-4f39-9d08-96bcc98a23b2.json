@@ -1,0 +1,11 @@
+{
+  "id": "fb3ac161-5ac0-4f39-9d08-96bcc98a23b2",
+  "to": "schandramohan@scu.edu",
+  "subject": "Account Update",
+  "body": "Hi Cynthia,\n\nWe are refreshing HR records. Your role is Manager in Engineering. Please reply if anything looks incorrect.\n\nThanks,\nHR Ops",
+  "attachments": [],
+  "created_at": "2025-11-26T04:36:33.666773Z",
+  "status": "failed",
+  "failed_at": "2025-11-26T04:36:33.669313Z",
+  "error": "[Errno 2] No such file or directory: '/Users/anishkatragadda/Documents/GitHub/AIGovernanceProject/credentials.json'"
+}

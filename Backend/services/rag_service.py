@@ -11,7 +11,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_SYSTEM_PROMPT = (
     "You are Astral Assist, an enterprise knowledge assistant. "
     "Use only the provided context to answer the user. "
-    "When information is missing, state that explicitly."
+    "Be concise. Do not list document names, scores, or raw citations. "
+    "Ask at most one brief clarifying question only if truly needed. "
+    "Do not propose emails or actions unless explicitly requested. "
+    "When information is missing, say so briefly."
 )
 
 
@@ -25,7 +28,7 @@ class EmbeddingClient(Protocol):
 class LLMClient(Protocol):
     """Protocol for large language model chat/generation clients."""
 
-    def generate(self, prompt: str, context_blocks: List[str]) -> str:
+    def generate(self, prompt: str, context_blocks: List[str], history: Optional[List[Dict[str, str]]] = None) -> str:
         ...
 
 
@@ -36,6 +39,7 @@ class PineconeConfig:
     host: Optional[str] = None
     namespace: str = "main"
     top_k: int = 5
+    dimension: Optional[int] = None
 
 
 @dataclass
@@ -83,10 +87,25 @@ class PineconeVectorStore:
         # host value returned from the console. For legacy pods the host is optional.
         self.index = self.client.Index(name=config.index_name, host=config.host)
 
+    def _align_vector(self, vector: List[float]) -> List[float]:
+        """
+        Ensure vector length matches the Pinecone index dimension.
+        If dimension is set and vectors are shorter/longer, pad or truncate to fit.
+        """
+        if not self.config.dimension:
+            return vector
+        if len(vector) == self.config.dimension:
+            return vector
+        if len(vector) < self.config.dimension:
+            padded = vector + [0.0] * (self.config.dimension - len(vector))
+            return padded
+        # Truncate if longer than expected
+        return vector[: self.config.dimension]
+
     def similarity_search(self, vector: List[float], top_k: Optional[int] = None) -> List[Dict[str, Any]]:
         try:
             result = self.index.query(
-                vector=vector,
+                vector=self._align_vector(vector),
                 top_k=top_k or self.config.top_k,
                 include_metadata=True,
                 namespace=self.config.namespace,
@@ -109,6 +128,31 @@ class PineconeVectorStore:
             )
         return contexts
 
+    def upsert(self, items: List[Dict[str, Any]]):
+        """Insert or update vectors in Pinecone."""
+        vectors = [
+            {
+                "id": item["id"],
+                "values": self._align_vector(item["vector"]),
+                "metadata": item.get("metadata") or {},
+            }
+            for item in items
+        ]
+        try:
+            self.index.upsert(vectors=vectors, namespace=self.config.namespace)
+        except PineconeException as exc:
+            logger.exception("Pinecone upsert failed")
+            raise RuntimeError(f"Pinecone upsert failed: {exc}") from exc
+
+    def wipe_namespace(self, namespace: Optional[str] = None):
+        """Delete all vectors in the given namespace (or default)."""
+        target = namespace or self.config.namespace
+        try:
+            self.index.delete(delete_all=True, namespace=target)
+        except PineconeException as exc:
+            logger.exception("Pinecone delete failed")
+            raise RuntimeError(f"Pinecone delete failed: {exc}") from exc
+
 
 class GroqLLMClient:
     """Handles Groq chat completions."""
@@ -117,23 +161,34 @@ class GroqLLMClient:
         self.config = config
         self.client = Groq(api_key=config.api_key)
 
-    def generate(self, prompt: str, context_blocks: List[str]) -> str:
+    def generate(self, prompt: str, context_blocks: List[str], history: Optional[List[Dict[str, str]]] = None) -> str:
         context_string = "\n\n".join(context_blocks) if context_blocks else "Context unavailable."
+        messages: List[Dict[str, str]] = [{"role": "system", "content": self.config.system_prompt}]
+
+        # Include short history for conversational continuity.
+        if history:
+            for msg in history[-10:]:  # limit to last 10 turns
+                role = "assistant" if msg.get("role") == "assistant" else "user"
+                content = msg.get("content", "")
+                if content:
+                    messages.append({"role": role, "content": content})
+
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Context:\n"
+                    f"{context_string}\n\n"
+                    "User question:\n"
+                    f"{prompt}\n"
+                    "Always cite the provided files where possible."
+                ),
+            }
+        )
+
         completion = self.client.chat.completions.create(
             model=self.config.model,
-            messages=[
-                {"role": "system", "content": self.config.system_prompt},
-                {
-                    "role": "user",
-                    "content": (
-                        "Context:\n"
-                        f"{context_string}\n\n"
-                        "User question:\n"
-                        f"{prompt}\n"
-                        "Always cite the provided files where possible."
-                    ),
-                },
-            ],
+            messages=messages,
             temperature=0.2,
         )
         return completion.choices[0].message.content.strip()
@@ -156,26 +211,46 @@ class RAGService:
 
     def retrieve(self, query: str) -> List[Dict[str, Any]]:
         vector = self.embedder.embed(query)
-        return self.vector_store.similarity_search(vector)
+        contexts = self.vector_store.similarity_search(vector)
+        # Drop empty/garbage contexts
+        return [c for c in contexts if (c.get("text") or "").strip()]
 
-    def answer(self, query: str) -> Dict[str, Any]:
+    def answer(self, query: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+        if _is_smalltalk(query):
+            return {
+                "response": "Hello! How can I help today?",
+                "contexts": [],
+                "agent_strategy": "rag_only",
+                "agents_used": ["rag"],
+            }
         contexts = self.retrieve(query)
         blocks = self._format_context_blocks(contexts)
-        response = self.llm_client.generate(query, blocks)
+        response = self.llm_client.generate(query, blocks, history=history)
+        # Return metadata-only contexts (no text) to reduce leakage but preserve routing hints.
+        client_contexts = [
+            {
+                "score": ctx.get("score"),
+                "metadata": ctx.get("metadata") or {},
+            }
+            for ctx in contexts
+        ]
         return {
             "response": response,
-            "contexts": contexts,
+            "contexts": client_contexts,
             "agent_strategy": "rag_only",
             "agents_used": ["rag"],
         }
+
+    def wipe(self, namespace: Optional[str] = None):
+        """Clear all vectors in the namespace."""
+        self.vector_store.wipe_namespace(namespace)
 
     @staticmethod
     def _format_context_blocks(contexts: List[Dict[str, Any]]) -> List[str]:
         blocks: List[str] = []
         for idx, context in enumerate(contexts, start=1):
-            source = context["metadata"].get("source") or context["metadata"].get("file_name") or f"Document {idx}"
             text = context["text"]
-            blocks.append(f"[{source} | score={context.get('score')}] {text}")
+            blocks.append(f"{text}")
         return blocks
 
 
@@ -187,6 +262,7 @@ def build_rag_service_from_env() -> RAGService:
         host=os.getenv("PINECONE_HOST"),
         namespace=os.getenv("PINECONE_DEFAULT_NAMESPACE", "main"),
         top_k=int(os.getenv("PINECONE_TOP_K", "5")),
+        dimension=int(os.getenv("PINECONE_DIMENSION", "0")) or None,
     )
     jina_config = JinaConfig(api_key=_require_env("JINA_API_KEY"), model=os.getenv("JINA_EMBEDDING_MODEL", "jina-embeddings-v2-base-en"))
     groq_config = GroqConfig(
@@ -206,3 +282,8 @@ def _require_env(key: str) -> str:
     if not value:
         raise RuntimeError(f"Environment variable '{key}' is required for the RAG service.")
     return value
+
+
+def _is_smalltalk(query: str) -> bool:
+    lower = query.strip().lower()
+    return lower in {"hi", "hello", "hey", "hey there", "yo", "hola"}

@@ -121,6 +121,55 @@ def create_message_with_attachments(to, subject, body_text, attachments=None):
     return {"raw": raw}
 
 
+def send_email(to: str, subject: str, body_text: str, attachments=None, dry_run: bool = False):
+    """Programmatic helper to send an email (or just log a dry-run).
+
+    Validates input using the same safety rules as the CLI flow and writes a log
+    entry to logs/email_<id>.json. Returns a dict with status/log/message_id.
+    """
+    attachments = attachments or []
+
+    if not validate_email_address(to):
+        raise ValueError(f"Invalid recipient email address: {to}")
+    if not subject or len(subject) > 255:
+        raise ValueError("Subject is required and must be <= 255 characters.")
+    if not body_text or len(body_text) > 10000:
+        raise ValueError("Body is required and must be <= 10,000 characters.")
+
+    blocked = [p for p in attachments if not is_safe_attachment(p)]
+    if blocked:
+        raise ValueError(f"Blocked or missing attachments: {blocked}")
+
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "to": to,
+        "subject": subject,
+        "body": body_text,
+        "attachments": attachments,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "status": "pending" if dry_run else "sending",
+    }
+    save_email_log(log_entry)
+
+    if dry_run:
+        return {"status": "pending", "log_id": log_entry["id"], "message": "Dry run; not sent."}
+
+    service = get_service()
+    msg = create_message_with_attachments(to, subject, body_text, attachments)
+    sent = service.users().messages().send(userId="me", body=msg).execute()
+    message_id = sent.get("id")
+
+    log_entry.update(
+        {
+            "status": "sent",
+            "sent_at": datetime.utcnow().isoformat() + "Z",
+            "message_id": message_id,
+        }
+    )
+    save_email_log(log_entry)
+    return {"status": "sent", "message_id": message_id, "log_id": log_entry["id"]}
+
+
 if __name__ == "__main__":
     # Read email data from JSON
     with open(os.path.join(PROJECT_ROOT, "email_data.json"), "r") as f:
