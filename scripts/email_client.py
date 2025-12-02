@@ -15,10 +15,15 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# Path to credentials.json in project root
+# Resolve project root relative to scripts/
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CREDENTIALS_PATH = os.path.join(PROJECT_ROOT, "credentials.json")
-TOKEN_PATH = os.path.join(PROJECT_ROOT, "token.json")
+
+# Allow overriding Gmail credential/token paths so deploys can avoid filename conflicts.
+# Defaults match the existing local workflow (root/credentials.json, root/token.json).
+CREDENTIALS_PATH = os.getenv(
+    "GMAIL_CREDENTIALS_FILE", os.path.join(PROJECT_ROOT, "credentials.json")
+)
+TOKEN_PATH = os.getenv("GMAIL_TOKEN_FILE", os.path.join(PROJECT_ROOT, "token.json"))
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
@@ -50,6 +55,9 @@ def save_email_log(entry: dict):
 
 def get_service():
     creds = None
+
+    if not os.path.exists(CREDENTIALS_PATH):
+        raise FileNotFoundError(f"Gmail credentials not found at {CREDENTIALS_PATH}")
 
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
