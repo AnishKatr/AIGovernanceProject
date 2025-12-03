@@ -44,6 +44,24 @@ def _resolve_credentials_path():
         "Set GMAIL_CREDENTIALS_FILE to the correct JSON path."
     )
 
+
+def _load_token_credentials():
+    """Load token credentials from env JSON or a token file if present."""
+    token_json = os.getenv("GMAIL_TOKEN_JSON")
+    if token_json:
+        try:
+            data = json.loads(token_json)
+            return Credentials.from_authorized_user_info(data, SCOPES)
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"Failed to parse GMAIL_TOKEN_JSON: {exc}")
+
+    if os.path.exists(TOKEN_PATH):
+        try:
+            return Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"Failed to read token file {TOKEN_PATH}: {exc}")
+    return None
+
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 SAFE_ATTACHMENT_EXTENSIONS = {'.txt', '.pdf', '.png', '.jpg', '.jpeg', '.csv', '.py'}
@@ -73,22 +91,24 @@ def save_email_log(entry: dict):
 
 
 def get_service():
-    creds = None
+    creds = _load_token_credentials()
     credentials_path = _resolve_credentials_path()
-
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                credentials_path, SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_PATH, "w") as token:
-            token.write(creds.to_json())
+            flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
+            try:
+                creds = flow.run_local_server(port=0)
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"Local server auth failed ({exc}); falling back to console auth.")
+                creds = flow.run_console()
+        try:
+            with open(TOKEN_PATH, "w") as token:
+                token.write(creds.to_json())
+        except Exception as exc:  # pylint: disable=broad-except
+            print(f"Warning: could not persist token to {TOKEN_PATH}: {exc}")
 
     return build("gmail", "v1", credentials=creds)
 
