@@ -62,6 +62,17 @@ def _load_token_credentials():
             print(f"Failed to read token file {TOKEN_PATH}: {exc}")
     return None
 
+
+def _is_headless_env() -> bool:
+    """Detect CI/Render/Heroku-like environments where browser auth is impossible."""
+    markers = [
+        os.getenv("CI"),
+        os.getenv("RENDER"),
+        os.getenv("DYNO"),  # Heroku
+        os.getenv("K_SERVICE"),  # Cloud Run
+    ]
+    return any(markers)
+
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 SAFE_ATTACHMENT_EXTENSIONS = {'.txt', '.pdf', '.png', '.jpg', '.jpeg', '.csv', '.py'}
@@ -93,11 +104,18 @@ def save_email_log(entry: dict):
 def get_service():
     creds = _load_token_credentials()
     credentials_path = _resolve_credentials_path()
+    allow_console_auth = os.getenv("ALLOW_CONSOLE_GMAIL_AUTH", "").lower() in {"1", "true", "yes"}
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            if _is_headless_env() and not allow_console_auth:
+                raise RuntimeError(
+                    "Gmail token not found or invalid in a headless environment. "
+                    "Set GMAIL_TOKEN_FILE or GMAIL_TOKEN_JSON with a valid refresh token, "
+                    "or set ALLOW_CONSOLE_GMAIL_AUTH=1 to permit console-based auth."
+                )
             flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
             try:
                 creds = flow.run_local_server(port=0)
