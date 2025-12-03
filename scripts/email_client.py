@@ -20,10 +20,29 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Allow overriding Gmail credential/token paths so deploys can avoid filename conflicts.
 # Defaults match the existing local workflow (root/credentials.json, root/token.json).
-CREDENTIALS_PATH = os.getenv(
-    "GMAIL_CREDENTIALS_FILE", os.path.join(PROJECT_ROOT, "credentials.json")
-)
+# Also fall back to email_credentials.json if present, since that name is committed.
 TOKEN_PATH = os.getenv("GMAIL_TOKEN_FILE", os.path.join(PROJECT_ROOT, "token.json"))
+
+
+def _resolve_credentials_path():
+    """Pick the first existing credentials file from common locations."""
+    candidates = [
+        os.getenv("GMAIL_CREDENTIALS_FILE"),
+        os.path.join(PROJECT_ROOT, "credentials.json"),
+        os.path.join(PROJECT_ROOT, "email_credentials.json"),
+        os.path.join(PROJECT_ROOT, "scripts", "credentials.json"),
+    ]
+    tried = []
+    for path in candidates:
+        if not path:
+            continue
+        tried.append(path)
+        if os.path.exists(path):
+            return path
+    raise FileNotFoundError(
+        f"Gmail credentials not found. Checked: {', '.join(tried)}. "
+        "Set GMAIL_CREDENTIALS_FILE to the correct JSON path."
+    )
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
@@ -55,9 +74,7 @@ def save_email_log(entry: dict):
 
 def get_service():
     creds = None
-
-    if not os.path.exists(CREDENTIALS_PATH):
-        raise FileNotFoundError(f"Gmail credentials not found at {CREDENTIALS_PATH}")
+    credentials_path = _resolve_credentials_path()
 
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
@@ -67,7 +84,7 @@ def get_service():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                CREDENTIALS_PATH, SCOPES
+                credentials_path, SCOPES
             )
             creds = flow.run_local_server(port=0)
         with open(TOKEN_PATH, "w") as token:
