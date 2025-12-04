@@ -1,16 +1,16 @@
 employee_id,first_name,last_name,email,department,designation,phone,bank_name,bank_account_number,account_balance
-1,Danielle,Johnson,tkhambadkone@scu.edu,Engineering,Coordinator,533-521-8196x001,Wells Fargo,QTAR38637940265423,16020.13
-2,Susan,Rogers,vvyas@scu.edu,Operations,Manager,361-855-9407,US Bank,CRJU95931034131647,8912.25
-3,Cynthia,Diaz,schandramohan@scu.edu,Engineering,Manager,(653)541-9283x276,Chase Bank,VKYY03056413953767,14838.71
-4,Douglas,Taylor,snathan@scu.edu,Finance,Manager,001-388-249-6965x3287,US Bank,DEUF69166978480184,13947.69
-5,Kayla,Peterson,snathan@scu.edu,HR,Senior Engineer,562-470-4828x1489,Citibank,LYFR80957015430391,31516.96
-6,Christopher,Tucker,tkhambadkone@scu.edu,Sales,Coordinator,882-527-8248,Citibank,RYXW34657871331509,20311.27
-7,Angela,Chapman,vvyas@scu.edu,Sales,Engineer,5106310518,Chase Bank,VPGR29973763116566,9173.56
-8,Stuart,Daniel,tkhambadkone@scu.edu,Marketing,Engineer,+1-610-965-1333x87262,US Bank,HCOZ81080132677360,16903.44
-9,Franklin,Smith,tkhambadkone@scu.edu,Operations,Analyst,(247)746-8723x4309,US Bank,BBSP88208121913619,10617.18
-10,John,Wheeler,schandramohan@scu.edu,Engineering,Specialist,+1-816-499-8543x534,Wells Fargo,VUJO51079911838425,42323.21
-11,Nicole,Suarez,snathan@scu.edu,Marketing,Specialist,(442)678-4980x841,Bank of America,DDXR24493534874016,36705.73
-12,Maria,Williams,tkhambadkone@scu.edu,Operations,Senior Engineer,724-427-8680x11280,Wells Fargo,NEBJ50533158692322,49334.97
-13,Nicole,Johnson,vvyas@scu.edu,Engineering,Analyst,001-756-634-2160x7337,Wells Fargo,ZHHA36541458685014,25403.46
+1,Danielle,Johnson,akatragada@scu.edu,Engineering,Coordinator,533-521-8196x001,Wells Fargo,QTAR38637940265423,16020.13
+2,Susan,Rogers,akatragadda@scu.edu,Operations,Manager,361-855-9407,US Bank,CRJU95931034131647,8912.25
+3,Cynthia,Diaz,akatragadda@scu.edu,Engineering,Manager,(653)541-9283x276,Chase Bank,VKYY03056413953767,14838.71
+4,Douglas,Taylor,akatragadda@scu.edu,Finance,Manager,001-388-249-6965x3287,US Bank,DEUF69166978480184,13947.69
+5,Kayla,Peterson,akatragadda@scu.edu,HR,Senior Engineer,562-470-4828x1489,Citibank,LYFR80957015430391,31516.96
+6,Christopher,Tucker,akatragadda@scu.edu,Sales,Coordinator,882-527-8248,Citibank,RYXW34657871331509,20311.27
+7,Angela,Chapman,akatragadda@scu.edu,Sales,Engineer,5106310518,Chase Bank,VPGR29973763116566,9173.56
+8,Stuart,Daniel,akatragadda@scu.edu,Marketing,Engineer,+1-610-965-1333x87262,US Bank,HCOZ81080132677360,16903.44
+9,Franklin,Smith,akatragadda@scu.edu,Operations,Analyst,(247)746-8723x4309,US Bank,BBSP88208121913619,10617.18
+10,John,Wheeler,akatragadda@scu.edu,Engineering,Specialist,+1-816-499-8543x534,Wells Fargo,VUJO51079911838425,42323.21
+11,Nicole,Suarez,akatragadda@scu.edu,Marketing,Specialist,(442)678-4980x841,Bank of America,DDXR24493534874016,36705.73
+12,Maria,Williams,akatragadda@scu.edu,Operations,Senior Engineer,724-427-8680x11280,Wells Fargo,NEBJ50533158692322,49334.97
+13,Nicole,Johnson,akatragadda@scu.edu,Engineering,Analyst,001-756-634-2160x7337,Wells Fargo,ZHHA36541458685014,25403.46
 14,Gregory,Estes,akatragadda@scu.edu,Sales,Engineer,501-696-5569x816,Wells Fargo,BWNA88356159514846,14427.82
 15,Mark,Terry,akatragadda@scu.edu,Operations,Coordinator,+1-823-266-2994,Chase Bank,JJGN99577738721489,32410.9
