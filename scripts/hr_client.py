@@ -1,9 +1,12 @@
-from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
-from typing import List, Optional
-from datetime import date
-from faker import Faker
+import csv
+import os
 import random
+from pathlib import Path
+from typing import List, Optional
+
+from fastapi import FastAPI, HTTPException, Query
+from faker import Faker
+from pydantic import BaseModel
 
 # Initialize FastAPI app
 app = FastAPI(title="Simple HR API", version="1.0.0")
@@ -37,6 +40,12 @@ class BalanceUpdate(BaseModel):
 # In-memory employee database
 employees_db: List[Employee] = []
 
+# Repo-relative CSV path (default to the committed employee_database.csv)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_EMPLOYEE_CSV = Path(
+    Path(os.getenv("HR_EMPLOYEE_CSV") or REPO_ROOT / "Backend" / "employee_database.csv")
+)
+
 # Configuration
 DEPARTMENTS = ["Engineering", "Sales", "Marketing", "HR", "Finance", "Operations"]
 DESIGNATIONS = ["Manager", "Senior Engineer", "Engineer", "Analyst", "Specialist", "Coordinator"]
@@ -46,7 +55,7 @@ EMAILS = ["tkhambadkone@scu.edu", "vvyas@scu.edu", "akatragadda@scu.edu", "schan
 def generate_employees(count: int = 15):
     """Generate toy employees"""
     employees = []
-    
+
     for i in range(1, count + 1):
         first_name = fake.first_name()
         last_name = fake.last_name()
@@ -64,15 +73,53 @@ def generate_employees(count: int = 15):
             account_balance=round(random.uniform(5000, 50000), 2)
         )
         employees.append(employee)
-    
+
     return employees
+
+
+def load_employees_from_csv(path: Path = DEFAULT_EMPLOYEE_CSV) -> List[Employee]:
+    """Load employees from a CSV file to keep API responses aligned with RAG data."""
+    if not path.exists():
+        print(f"⚠️  HR employee CSV not found at {path}. Falling back to generated data.")
+        return []
+
+    employees: List[Employee] = []
+    with path.open(newline="", encoding="utf-8", errors="ignore") as handle:
+        reader = csv.DictReader(handle)
+        for idx, row in enumerate(reader, start=1):
+            try:
+                emp = Employee(
+                    employee_id=int(row.get("employee_id", idx)),
+                    first_name=row.get("first_name", "").strip() or f"Employee{idx}",
+                    last_name=row.get("last_name", "").strip() or "Unknown",
+                    email=row.get("email", "").strip() or random.choice(EMAILS),
+                    department=row.get("department", "").strip() or random.choice(DEPARTMENTS),
+                    designation=row.get("designation", "").strip() or random.choice(DESIGNATIONS),
+                    phone=row.get("phone", "").strip() or fake.phone_number(),
+                    bank_name=row.get("bank_name", "").strip() or random.choice(BANKS),
+                    bank_account_number=row.get("bank_account_number", "").strip() or fake.bban(),
+                    account_balance=float(row.get("account_balance", 0) or 0.0),
+                )
+                employees.append(emp)
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"⚠️  Skipping CSV row {idx} due to error: {exc}")
+                continue
+
+    if not employees:
+        print(f"⚠️  No employees loaded from {path}. Falling back to generated data.")
+    else:
+        print(f"✓ Loaded {len(employees)} employees from {path}")
+    return employees
+
 
 # Startup: Populate database
 @app.on_event("startup")
 async def startup_event():
     global employees_db
-    employees_db = generate_employees(15)
-    print(f"✓ Generated {len(employees_db)} toy employees")
+    employees_db = load_employees_from_csv()
+    if not employees_db:
+        employees_db = generate_employees(15)
+        print(f"✓ Generated {len(employees_db)} toy employees (fallback)")
 
 # API Endpoints
 
